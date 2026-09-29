@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metrónomo descendente</title>
+<style>
+  :root { --bg:#f4f1ec; --fg:#2b2a28; --muted:#7a766f; --card:#fff; --accent:#4a7c74; --line:#ddd8cf; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1d1f1e; --fg:#e8e6e1; --muted:#9a968f; --card:#272a29; --accent:#7fb5aa; --line:#3a3e3c; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,Segoe UI,sans-serif; }
+  main { width:100%; max-width:420px; padding:24px 16px; }
+  h1 { font-size:1.1rem; font-weight:600; margin:0 0 16px; text-align:center; color:var(--muted); letter-spacing:.04em; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
+  .display { text-align:center; margin-bottom:20px; }
+  .bpm { font-size:3rem; font-weight:300; line-height:1; font-variant-numeric:tabular-nums; }
+  .bpm small { font-size:1rem; color:var(--muted); margin-left:4px; }
+  .time { color:var(--muted); margin-top:6px; font-variant-numeric:tabular-nums; }
+  .bar { height:4px; background:var(--line); border-radius:2px; margin-top:12px; overflow:hidden; }
+  .bar > div { height:100%; width:0; background:var(--accent); }
+  .knob { margin:16px 0; }
+  .knob select { font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--fg); }
+  button.try { width:auto; margin:0 0 0 6px; padding:5px 10px; font-size:.85rem; font-weight:500; background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .knob label { display:flex; justify-content:space-between; align-items:baseline; font-size:.9rem; margin-bottom:6px; }
+  .knob input[type=number] { width:80px; font:inherit; text-align:right; padding:4px 6px; border:1px solid var(--line);
+                              border-radius:8px; background:transparent; color:var(--fg); }
+  .knob input[type=range] { width:100%; accent-color:var(--accent); }
+  button { width:100%; margin-top:8px; padding:14px; font:inherit; font-size:1.05rem; font-weight:600; border:0;
+           border-radius:12px; background:var(--accent); color:#fff; cursor:pointer; }
+  button.stop { background:#b5544a; }
+  .hint { text-align:center; color:var(--muted); font-size:.8rem; margin-top:12px; min-height:1.2em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>METRÓNOMO DESCENDENTE</h1>
+  <div class="card">
+    <div class="display">
+      <div class="bpm"><span id="curBpm">55</span><small>pulsos/min</small></div>
+      <div class="time" id="timeLeft">20:00</div>
+      <div class="bar"><div id="prog"></div></div>
+    </div>
+
+    <div class="knob">
+      <label for="startN">Pulsos por minuto iniciales <input type="number" id="startN" min="1" max="240" value="55"></label>
+      <input type="range" id="startR" min="1" max="240" value="55">
+    </div>
+    <div class="knob">
+      <label for="endN">Pulsos por minuto finales <input type="number" id="endN" min="1" max="240" value="30"></label>
+      <input type="range" id="endR" min="1" max="240" value="30">
+    </div>
+    <div class="knob">
+      <label for="durN">Duración total (minutos) <input type="number" id="durN" min="1" max="180" value="20"></label>
+      <input type="range" id="durR" min="1" max="180" value="20">
+    </div>
+
+    <div class="knob">
+      <label for="sound">Sonido
+        <span><select id="sound">
+          <option value="cuenco" selected>Cuenco</option>
+          <option value="soplido">Soplido</option>
+          <option value="gota">Gota</option>
+          <option value="suave">Tono suave</option>
+        </select> <button id="try" class="try" type="button">Probar</button></span>
+      </label>
+    </div>
+
+    <button id="go">Iniciar</button>
+    <div class="hint" id="hint">Al terminar suenan 5 pitidos seguidos.</div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const startN=$('startN'), startR=$('startR'), endN=$('endN'), endR=$('endR'), durN=$('durN'), durR=$('durR');
+  const go=$('go'), curBpm=$('curBpm'), timeLeft=$('timeLeft'), prog=$('prog'), hint=$('hint');
+
+  // Sincroniza cada número con su deslizador y refresca la vista previa.
+  [[startN,startR],[endN,endR],[durN,durR]].forEach(([n,r]) => {
+    n.addEventListener('input', () => { r.value = n.value; preview(); });
+    r.addEventListener('input', () => { n.value = r.value; preview(); });
+  });
+
+  const fmt = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); };
+  const vals = () => ({
+    a: Math.max(1, +startN.value || 1),
+    b: Math.max(1, +endN.value || 1),
+    dur: Math.max(1, +durN.value || 1) * 60
+  });
+
+  function preview() {
+    if (running) return;
+    const v = vals();
+    curBpm.textContent = v.a;
+    timeLeft.textContent = fmt(v.dur);
+    prog.style.width = '0';
+  }
+
+  let ctx = null, running = false, t0 = 0, nextT = 0, timer = null, ui = null, finished = false;
+  let cfg = null, nodes = [], wake = null;
+  const LOOKAHEAD = 1.5;   // segundos agendados por adelantado (aguanta pestañas en segundo plano)
+
+  const bpmAt = t => cfg.a + (cfg.b - cfg.a) * Math.min(1, Math.max(0, t / cfg.dur));
+
+  function track(src, len, when) {
+    src.start(when); src.stop(when + len + 0.05);
+    nodes.push(src);
+    src.onended = () => { nodes = nodes.filter(x => x !== src); };
+  }
+
+  function env(when, vol, attack, len) {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(vol, when + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + len);
+    g.connect(ctx.destination);
+    return g;
+  }
+
+  function osc(when, freq, vol, attack, len, glideTo) {
+    const o = ctx.createOscillator();
+    o.type = 'sine'; o.frequency.setValueAtTime(freq, when);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, when + len * 0.5);
+    o.connect(env(when, vol, attack, len));
+    track(o, len, when);
+  }
+
+  let noiseBuf = null;
+  function noise(when, freq, vol, attack, len) {
+    if (!noiseBuf) {
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const s = ctx.createBufferSource(); s.buffer = noiseBuf;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.8;
+    s.connect(f).connect(env(when, vol, attack, len));
+    track(s, len, when);
+  }
+
+  // Cada sonido recibe el momento y si es el aviso final (más agudo y algo más fuerte).
+  const SOUNDS = {
+    suave:  (w, end) => osc(w, end ? 528 : 396, end ? 0.12 : 0.09, 0.12, 1.4),
+    cuenco: (w, end) => {
+      const f = end ? 293 : 220, v = end ? 0.13 : 0.10;
+      osc(w, f, v, 0.05, 3.2);
+      osc(w, f * 2.71, v * 0.30, 0.05, 2.0);
+      osc(w, f * 5.40, v * 0.10, 0.05, 1.2);
+    },
+    soplido: (w, end) => noise(w, end ? 900 : 550, end ? 0.55 : 0.40, 0.45, 1.6),
+    gota:   (w, end) => osc(w, end ? 700 : 520, end ? 0.14 : 0.10, 0.02, 0.6, end ? 450 : 330),
+  };
+  const soundSel = $('sound');
+  const play = (when, end) => SOUNDS[soundSel.value](when, end);
+  $('try').addEventListener('click', async () => {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    play(ctx.currentTime + 0.05, false);
+    play(ctx.currentTime + 2.5, true);
+  });
+
+  function schedule() {
+    while (!finished && nextT < ctx.currentTime + LOOKAHEAD) {
+      const el = nextT - t0;
+      if (el >= cfg.dur - 1e-6) {
+        // Fin: 5 pitidos seguidos, más agudos que el pulso.
+        const end = t0 + cfg.dur;
+        for (let i = 0; i < 5; i++) play(end + i * 0.9, true);
+        finished = true;
+        setTimeout(stop, (end - ctx.currentTime + 4.5) * 1000, true);
+        return;
+      }
+      play(nextT, false);
+      nextT += 60 / bpmAt(el);
+    }
+  }
+
+  function tick() {
+    const el = Math.min(cfg.dur, ctx.currentTime - t0);
+    if (el < 0) return;
+    curBpm.textContent = Math.round(bpmAt(el));
+    timeLeft.textContent = fmt(cfg.dur - el);
+    prog.style.width = (el / cfg.dur * 100) + '%';
+  }
+
+  async function start() {
+    cfg = vals();
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    running = true; finished = false;
+    t0 = ctx.currentTime + 0.15; nextT = t0;
+    go.textContent = 'Detener'; go.classList.add('stop');
+    hint.textContent = 'En marcha…';
+    schedule();
+    timer = setInterval(schedule, 100);
+    ui = setInterval(tick, 250);
+    try { wake = await navigator.wakeLock?.request('screen'); } catch (e) {}
+  }
+
+  function stop(done) {
+    if (!running) return;
+    running = false;
+    clearInterval(timer); clearInterval(ui);
+    if (done !== true) nodes.forEach(o => { try { o.stop(); } catch (e) {} });
+    nodes = [];
+    try { wake && wake.release(); } catch (e) {}
+    go.textContent = 'Iniciar'; go.classList.remove('stop');
+    hint.textContent = done === true ? '¡Tiempo cumplido!' : 'Detenido.';
+    if (done === true) { curBpm.textContent = cfg.b; timeLeft.textContent = '0:00'; prog.style.width = '100%'; }
+    else preview();
+  }
+
+  go.addEventListener('click', () => running ? stop() : start());
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && !/INPUT/.test(document.activeElement.tagName)) { e.preventDefault(); go.click(); }
+  });
+  preview();
+})();
+</script>
+</body>
+</html>
