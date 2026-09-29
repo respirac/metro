@@ -63,6 +63,7 @@
           <option value="cuenco" selected>Cuenco</option>
           <option value="soplido">Soplido</option>
           <option value="gota">Gota</option>
+          <option value="reloj">Reloj (tic-tac)</option>
           <option value="suave">Tono suave</option>
         </select> <button id="try" class="try" type="button">Probar</button></span>
       </label>
@@ -130,13 +131,16 @@
   }
 
   let noiseBuf = null;
-  function noise(when, freq, vol, attack, len) {
+  function getNoise() {
     if (!noiseBuf) {
       noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     }
-    const s = ctx.createBufferSource(); s.buffer = noiseBuf;
+    return noiseBuf;
+  }
+  function noise(when, freq, vol, attack, len) {
+    const s = ctx.createBufferSource(); s.buffer = getNoise();
     const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.8;
     s.connect(f).connect(env(when, vol, attack, len));
     track(s, len, when);
@@ -153,7 +157,22 @@
     },
     soplido: (w, end) => noise(w, end ? 900 : 550, end ? 0.55 : 0.40, 0.45, 1.6),
     gota:   (w, end) => osc(w, end ? 700 : 520, end ? 0.14 : 0.10, 0.02, 0.6, end ? 450 : 330),
+    // Tic-tac de reloj: clic seco y corto, alterna "tic" (agudo) y "tac" (grave). El aviso final es una campanita.
+    reloj:  (w, end) => {
+      if (end) { osc(w, 1320, 0.12, 0.005, 1.2); osc(w, 1320 * 2.76, 0.03, 0.005, 0.5); return; }
+      const tic = (clockTick = !clockTick);
+      const f = tic ? 3200 : 2200, v = tic ? 0.5 : 0.4;
+      click(w, f, v);
+      osc(w, tic ? 1500 : 1000, 0.08, 0.001, 0.05);
+    },
   };
+  let clockTick = false;
+  function click(when, freq, vol) {
+    const s = ctx.createBufferSource(); s.buffer = getNoise();
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 3;
+    s.connect(f).connect(env(when, vol, 0.001, 0.035));
+    track(s, 0.035, when);
+  }
   const soundSel = $('sound');
   const play = (when, end) => SOUNDS[soundSel.value](when, end);
   $('try').addEventListener('click', async () => {
