@@ -5,32 +5,52 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Metrónomo descendente</title>
 <style>
+  /* Paleta de colores (tema claro por defecto). */
   :root { --bg:#f4f1ec; --fg:#2b2a28; --muted:#7a766f; --card:#fff; --accent:#4a7c74; --line:#ddd8cf; }
+  /* Tema oscuro: se activa solo si el sistema operativo lo usa. */
   @media (prefers-color-scheme: dark) {
     :root { --bg:#1d1f1e; --fg:#e8e6e1; --muted:#9a968f; --card:#272a29; --accent:#7fb5aa; --line:#3a3e3c; }
   }
+  /* El padding y el borde cuentan dentro del ancho de cada elemento. */
   * { box-sizing:border-box; }
+  /* Página: centra la tarjeta en pantalla, con fuente del sistema. */
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
          background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,Segoe UI,sans-serif; }
+  /* Columna central de ancho máximo 420 px (cómoda en celular). */
   main { width:100%; max-width:420px; padding:24px 16px; }
+  /* Título discreto, centrado y en gris. */
   h1 { font-size:1.1rem; font-weight:600; margin:0 0 16px; text-align:center; color:var(--muted); letter-spacing:.04em; }
+  /* Tarjeta blanca (u oscura) que contiene todos los controles. */
   .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
+  /* Zona superior: pulsos por minuto, tiempo restante y barra de progreso. */
   .display { text-align:center; margin-bottom:20px; }
+  /* Número grande de pulsos/min; tabular-nums evita que "baile" al cambiar. */
   .bpm { font-size:3rem; font-weight:300; line-height:1; font-variant-numeric:tabular-nums; }
   .bpm small { font-size:1rem; color:var(--muted); margin-left:4px; }
+  /* Tiempo restante en gris, también con cifras de ancho fijo. */
   .time { color:var(--muted); margin-top:6px; font-variant-numeric:tabular-nums; }
+  /* Barra de progreso: pista fina gris con relleno de color (su ancho lo fija el JS). */
   .bar { height:4px; background:var(--line); border-radius:2px; margin-top:12px; overflow:hidden; }
   .bar > div { height:100%; width:0; background:var(--accent); }
+  /* Cada "perilla" (etiqueta + número + deslizador) con espacio arriba y abajo. */
   .knob { margin:16px 0; }
+  /* Estilo del selector de sonido. */
   .knob select { font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--fg); }
+  /* Botón chico "Probar": contorno de color, sin relleno (distinto del botón principal). */
   button.try { width:auto; margin:0 0 0 6px; padding:5px 10px; font-size:.85rem; font-weight:500; background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  /* Etiqueta a la izquierda y campo numérico a la derecha, en la misma línea. */
   .knob label { display:flex; justify-content:space-between; align-items:baseline; font-size:.9rem; margin-bottom:6px; }
+  /* Campo numérico angosto, alineado a la derecha. */
   .knob input[type=number] { width:80px; font:inherit; text-align:right; padding:4px 6px; border:1px solid var(--line);
                               border-radius:8px; background:transparent; color:var(--fg); }
+  /* Deslizador a todo el ancho, con el color de acento. */
   .knob input[type=range] { width:100%; accent-color:var(--accent); }
+  /* Botón principal Iniciar/Detener: ancho completo, grande y de color. */
   button { width:100%; margin-top:8px; padding:14px; font:inherit; font-size:1.05rem; font-weight:600; border:0;
            border-radius:12px; background:var(--accent); color:#fff; cursor:pointer; }
+  /* Mientras está en marcha el botón se vuelve rojo ("Detener"). */
   button.stop { background:#b5544a; }
+  /* Mensaje de estado bajo el botón; min-height evita que la tarjeta salte al cambiar el texto. */
   .hint { text-align:center; color:var(--muted); font-size:.8rem; margin-top:12px; min-height:1.2em; }
 </style>
 </head>
@@ -38,25 +58,30 @@
 <main>
   <h1>METRÓNOMO DESCENDENTE</h1>
   <div class="card">
+    <!-- Pantalla: pulsos/min actuales, tiempo restante y barra de progreso. Valores iniciales = los de las perillas. -->
     <div class="display">
       <div class="bpm"><span id="curBpm">55</span><small>pulsos/min</small></div>
-      <div class="time" id="timeLeft">20:00</div>
+      <div class="time" id="timeLeft">5:00</div>
       <div class="bar"><div id="prog"></div></div>
     </div>
 
+    <!-- Perilla 1: pulsos por minuto al comenzar (número + deslizador sincronizados por el JS). -->
     <div class="knob">
       <label for="startN">Pulsos por minuto iniciales <input type="number" id="startN" min="1" max="240" value="55"></label>
       <input type="range" id="startR" min="1" max="240" value="55">
     </div>
+    <!-- Perilla 2: pulsos por minuto al terminar. -->
     <div class="knob">
       <label for="endN">Pulsos por minuto finales <input type="number" id="endN" min="1" max="240" value="30"></label>
       <input type="range" id="endR" min="1" max="240" value="30">
     </div>
+    <!-- Perilla 3: duración total en minutos (por defecto 5). -->
     <div class="knob">
-      <label for="durN">Duración total (minutos) <input type="number" id="durN" min="1" max="180" value="20"></label>
-      <input type="range" id="durR" min="1" max="180" value="20">
+      <label for="durN">Duración total (minutos) <input type="number" id="durN" min="1" max="180" value="5"></label>
+      <input type="range" id="durR" min="1" max="180" value="5">
     </div>
 
+    <!-- Selector de sonido y botón para escucharlo (pulso + aviso final). El tic-tac viene preseleccionado. -->
     <div class="knob">
       <label for="sound">Sonido
         <span><select id="sound">
@@ -69,59 +94,111 @@
       </label>
     </div>
 
+    <!-- Botón principal: alterna entre Iniciar y Detener. -->
     <button id="go">Iniciar</button>
+    <!-- Mensaje de estado ("En marcha…", "Detenido.", "¡Tiempo cumplido!"). -->
     <div class="hint" id="hint">Al terminar suenan 5 pitidos seguidos.</div>
   </div>
 </main>
 
 <script>
+// Todo el programa va dentro de una función que se ejecuta al cargar, para no ensuciar el espacio global.
 (() => {
+  // Atajo para buscar un elemento por su id.
   const $ = id => document.getElementById(id);
+  // Referencias a los campos numéricos (N) y deslizadores (R) de las tres perillas.
   const startN=$('startN'), startR=$('startR'), endN=$('endN'), endR=$('endR'), durN=$('durN'), durR=$('durR');
+  // Referencias a la pantalla: botón principal, pulsos/min, tiempo restante, barra de progreso y mensaje.
   const go=$('go'), curBpm=$('curBpm'), timeLeft=$('timeLeft'), prog=$('prog'), hint=$('hint');
 
   // Sincroniza cada número con su deslizador y refresca la vista previa.
   [[startN,startR],[endN,endR],[durN,durR]].forEach(([n,r]) => {
-    n.addEventListener('input', () => { r.value = n.value; preview(); });
-    r.addEventListener('input', () => { n.value = r.value; preview(); });
+    n.addEventListener('input', () => { r.value = n.value; preview(); });   // al escribir el número, mueve el deslizador
+    r.addEventListener('input', () => { n.value = r.value; preview(); });   // al mover el deslizador, actualiza el número
   });
 
+  // Formatea segundos como m:ss (redondea hacia arriba y nunca muestra negativos).
   const fmt = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); };
+  // Lee las perillas y devuelve la configuración; mínimo 1 para evitar ceros o campos vacíos.
   const vals = () => ({
-    a: Math.max(1, +startN.value || 1),
-    b: Math.max(1, +endN.value || 1),
-    dur: Math.max(1, +durN.value || 1) * 60
+    a: Math.max(1, +startN.value || 1),               // pulsos/min iniciales
+    b: Math.max(1, +endN.value || 1),                 // pulsos/min finales
+    dur: Math.max(1, +durN.value || 1) * 60           // duración total, convertida a segundos
   });
 
+  // Muestra en pantalla cómo quedaría la sesión con los valores actuales (solo si no está en marcha).
   function preview() {
-    if (running) return;
+    if (running) return;                              // durante la sesión la pantalla la maneja tick()
     const v = vals();
-    curBpm.textContent = v.a;
-    timeLeft.textContent = fmt(v.dur);
-    prog.style.width = '0';
+    curBpm.textContent = v.a;                         // arranca en los pulsos/min iniciales
+    timeLeft.textContent = fmt(v.dur);                // tiempo restante = duración total
+    prog.style.width = '0';                           // barra vacía
   }
 
+  // Estado del programa:
+  // ctx = contexto de audio; running = sesión en marcha; t0 = instante de inicio (reloj del audio);
+  // nextT = instante del próximo pulso; timer/ui = temporizadores; finished = ya se agendó el aviso final.
   let ctx = null, running = false, t0 = 0, nextT = 0, timer = null, ui = null, finished = false;
+  // cfg = configuración congelada al iniciar; nodes = sonidos agendados (para cortarlos al detener); wake = bloqueo de pantalla.
   let cfg = null, nodes = [], wake = null;
-  const LOOKAHEAD = 1.5;   // segundos agendados por adelantado (aguanta pestañas en segundo plano)
+  // Segundos agendados por adelantado. Con la pantalla apagada el celular frena los temporizadores de JS,
+  // así que se agenda bastante a futuro y el motor de audio sigue sonando solo.
+  const LOOKAHEAD = 120;
+  let out = null, mediaEl = null;   // out = salida común de todos los sonidos; mediaEl = <audio> que mantiene vivo el audio con pantalla apagada
 
+  // Crea (una sola vez) el contexto de audio. El sonido se envía a un <audio> real: así Android/iOS lo tratan
+  // como reproducción multimedia y no lo suspenden al apagar la pantalla. Si falla, sale directo a los parlantes.
+  function ensureCtx() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    out = ctx.createGain();
+    try {
+      const dest = ctx.createMediaStreamDestination();
+      out.connect(dest);
+      mediaEl = new Audio();
+      mediaEl.srcObject = dest.stream;
+      mediaEl.setAttribute('playsinline', '');
+    } catch (e) { out.connect(ctx.destination); mediaEl = null; }
+  }
+  // Reproduce el <audio> y registra los controles de Media Session (pantalla de bloqueo).
+  async function startMedia() {
+    if (!mediaEl) return;
+    try { await mediaEl.play(); } catch (e) { try { out.disconnect(); } catch (_) {} out.connect(ctx.destination); mediaEl = null; return; }
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: 'Metrónomo descendente' });
+        navigator.mediaSession.playbackState = 'playing';
+        navigator.mediaSession.setActionHandler('pause', () => stop());
+        navigator.mediaSession.setActionHandler('stop', () => stop());
+      } catch (e) {}
+    }
+  }
+  function stopMedia() {
+    try { mediaEl && mediaEl.pause(); } catch (e) {}
+    try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'; } catch (e) {}
+  }
+
+  // Pulsos/min en el instante t (segundos desde el inicio): interpolación lineal de a hacia b, acotada entre 0 y 1.
   const bpmAt = t => cfg.a + (cfg.b - cfg.a) * Math.min(1, Math.max(0, t / cfg.dur));
 
+  // Agenda un generador de sonido (start/stop) y lo guarda en la lista para poder cancelarlo.
   function track(src, len, when) {
-    src.start(when); src.stop(when + len + 0.05);
+    src.start(when); src.stop(when + len + 0.05);     // arranca en "when" y se corta un poco después de terminar
     nodes.push(src);
-    src.onended = () => { nodes = nodes.filter(x => x !== src); };
+    src.onended = () => { nodes = nodes.filter(x => x !== src); };   // al terminar, se saca de la lista
   }
 
+  // Crea la envolvente de volumen: sube desde casi 0 hasta vol (ataque) y decae hasta casi 0 en len segundos.
   function env(when, vol, attack, len) {
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, when);
-    g.gain.exponentialRampToValueAtTime(vol, when + attack);
-    g.gain.exponentialRampToValueAtTime(0.0001, when + len);
-    g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.0001, when);                              // arranca en silencio (no puede ser 0 en rampa exponencial)
+    g.gain.exponentialRampToValueAtTime(vol, when + attack);          // ataque
+    g.gain.exponentialRampToValueAtTime(0.0001, when + len);          // decaimiento
+    g.connect(out);                                                   // salida común (va al <audio> o a los parlantes)
     return g;
   }
 
+  // Tono puro (sinusoide) de frecuencia freq; si se da glideTo, la frecuencia baja hasta ese valor a mitad del sonido.
   function osc(when, freq, vol, attack, len, glideTo) {
     const o = ctx.createOscillator();
     o.type = 'sine'; o.frequency.setValueAtTime(freq, when);
@@ -130,15 +207,17 @@
     track(o, len, when);
   }
 
+  // Buffer de ruido blanco de 3 s, creado una sola vez y reutilizado por noise() y click().
   let noiseBuf = null;
   function getNoise() {
     if (!noiseBuf) {
       noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
       const d = noiseBuf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;   // muestras al azar entre -1 y 1
     }
     return noiseBuf;
   }
+  // Ruido filtrado alrededor de freq (pasa-banda suave): sirve para el "soplido".
   function noise(when, freq, vol, attack, len) {
     const s = ctx.createBufferSource(); s.buffer = getNoise();
     const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.8;
@@ -148,95 +227,122 @@
 
   // Cada sonido recibe el momento y si es el aviso final (más agudo y algo más fuerte).
   const SOUNDS = {
+    // Tono suave: una sinusoide de 396 Hz (528 Hz en el aviso final).
     suave:  (w, end) => osc(w, end ? 528 : 396, end ? 0.12 : 0.09, 0.12, 1.4),
+    // Cuenco: tono grave más dos parciales inarmónicos (×2,71 y ×5,4) que imitan un cuenco tibetano.
     cuenco: (w, end) => {
       const f = end ? 293 : 220, v = end ? 0.13 : 0.10;
       osc(w, f, v, 0.05, 3.2);
       osc(w, f * 2.71, v * 0.30, 0.05, 2.0);
       osc(w, f * 5.40, v * 0.10, 0.05, 1.2);
     },
+    // Soplido: ruido filtrado con ataque lento (0,45 s), como una exhalación.
     soplido: (w, end) => noise(w, end ? 900 : 550, end ? 0.55 : 0.40, 0.45, 1.6),
+    // Gota: tono corto que baja de frecuencia (520 → 330 Hz).
     gota:   (w, end) => osc(w, end ? 700 : 520, end ? 0.14 : 0.10, 0.02, 0.6, end ? 450 : 330),
     // Tic-tac de reloj: clic seco y corto, alterna "tic" (agudo) y "tac" (grave). El aviso final es una campanita.
     reloj:  (w, end) => {
-      if (end) { osc(w, 1320, 0.12, 0.005, 1.2); osc(w, 1320 * 2.76, 0.03, 0.005, 0.5); return; }
-      const tic = (clockTick = !clockTick);
-      const f = tic ? 3200 : 2200, v = tic ? 0.5 : 0.4;
-      click(w, f, v);
-      osc(w, tic ? 1500 : 1000, 0.08, 0.001, 0.05);
+      if (end) { osc(w, 1320, 0.12, 0.005, 1.2); osc(w, 1320 * 2.76, 0.03, 0.005, 0.5); return; }   // campanita: tono + parcial inarmónico
+      const tic = (clockTick = !clockTick);           // alterna verdadero/falso en cada pulso: tic, tac, tic, tac…
+      const f = tic ? 3200 : 2200, v = tic ? 0.5 : 0.4;   // el "tic" es más agudo y fuerte que el "tac"
+      click(w, f, v);                                 // golpe seco de ruido filtrado
+      osc(w, tic ? 1500 : 1000, 0.08, 0.001, 0.05);   // y un tono muy breve que le da cuerpo
     },
   };
+  // Marca cuál de los dos golpes (tic o tac) toca ahora.
   let clockTick = false;
+  // Clic seco: ráfaga de ruido de 35 ms filtrada alrededor de freq (Q alto = más tonal).
   function click(when, freq, vol) {
     const s = ctx.createBufferSource(); s.buffer = getNoise();
     const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 3;
     s.connect(f).connect(env(when, vol, 0.001, 0.035));
     track(s, 0.035, when);
   }
+  // Selector de sonido y función que reproduce el elegido (pulso normal o aviso final) en el instante "when".
   const soundSel = $('sound');
   const play = (when, end) => SOUNDS[soundSel.value](when, end);
+  // Botón "Probar": suena un pulso y, 2,5 s después, el aviso final.
   $('try').addEventListener('click', async () => {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    ensureCtx();                                      // crea el audio la primera vez (el navegador exige un clic previo)
     await ctx.resume();
+    await startMedia();
     play(ctx.currentTime + 0.05, false);
     play(ctx.currentTime + 2.5, true);
   });
 
+  // Agendador: agenda todos los pulsos que caen dentro de la ventana de anticipación (LOOKAHEAD).
   function schedule() {
     while (!finished && nextT < ctx.currentTime + LOOKAHEAD) {
-      const el = nextT - t0;
-      if (el >= cfg.dur - 1e-6) {
+      const el = nextT - t0;                          // segundos transcurridos al momento de ese pulso
+      if (el >= cfg.dur - 1e-6) {                     // ya se cumplió la duración total
         // Fin: 5 pitidos seguidos, más agudos que el pulso.
         const end = t0 + cfg.dur;
-        for (let i = 0; i < 5; i++) play(end + i * 0.9, true);
+        for (let i = 0; i < 5; i++) play(end + i * 0.9, true);              // un pitido cada 0,9 s
         finished = true;
-        setTimeout(stop, (end - ctx.currentTime + 4.5) * 1000, true);
+        setTimeout(stop, (end - ctx.currentTime + 4.5) * 1000, true);       // cierra la sesión cuando terminan los pitidos
         return;
       }
-      play(nextT, false);
-      nextT += 60 / bpmAt(el);
+      play(nextT, false);                             // agenda el pulso
+      nextT += 60 / bpmAt(el);                        // próximo pulso: 60 / pulsos-por-minuto = segundos entre pulsos
     }
   }
 
+  // Actualiza la pantalla (pulsos/min, tiempo restante, barra) con el avance real del reloj de audio.
   function tick() {
     const el = Math.min(cfg.dur, ctx.currentTime - t0);
-    if (el < 0) return;
+    if (el < 0) return;                               // todavía no arrancó (hay 0,15 s de margen)
     curBpm.textContent = Math.round(bpmAt(el));
     timeLeft.textContent = fmt(cfg.dur - el);
     prog.style.width = (el / cfg.dur * 100) + '%';
   }
 
+  // Inicia la sesión.
   async function start() {
-    cfg = vals();
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    cfg = vals();                                     // congela la configuración
+    ensureCtx();
     await ctx.resume();
+    await startMedia();
     running = true; finished = false;
-    t0 = ctx.currentTime + 0.15; nextT = t0;
+    t0 = ctx.currentTime + 0.15; nextT = t0;          // pequeño margen antes del primer pulso
     go.textContent = 'Detener'; go.classList.add('stop');
     hint.textContent = 'En marcha…';
     schedule();
-    timer = setInterval(schedule, 100);
-    ui = setInterval(tick, 250);
-    try { wake = await navigator.wakeLock?.request('screen'); } catch (e) {}
+    timer = setInterval(schedule, 100);               // revisa cada 100 ms si hay que agendar más pulsos
+    ui = setInterval(tick, 250);                      // refresca la pantalla 4 veces por segundo
+    try { wake = await navigator.wakeLock?.request('screen'); } catch (e) {}   // evita que la pantalla se apague (si el navegador lo permite)
   }
 
+  // Detiene la sesión. done === true significa que terminó sola; si no, la cortó el usuario.
   function stop(done) {
     if (!running) return;
     running = false;
     clearInterval(timer); clearInterval(ui);
-    if (done !== true) nodes.forEach(o => { try { o.stop(); } catch (e) {} });
+    if (done !== true) nodes.forEach(o => { try { o.stop(); } catch (e) {} });   // si se cortó a mano, silencia lo ya agendado
     nodes = [];
-    try { wake && wake.release(); } catch (e) {}
+    try { wake && wake.release(); } catch (e) {}      // libera el bloqueo de pantalla
+    stopMedia();
     go.textContent = 'Iniciar'; go.classList.remove('stop');
     hint.textContent = done === true ? '¡Tiempo cumplido!' : 'Detenido.';
-    if (done === true) { curBpm.textContent = cfg.b; timeLeft.textContent = '0:00'; prog.style.width = '100%'; }
-    else preview();
+    if (done === true) { curBpm.textContent = cfg.b; timeLeft.textContent = '0:00'; prog.style.width = '100%'; }   // pantalla final
+    else preview();                                   // si se cortó a mano, vuelve a la vista previa
   }
 
+  // Al volver a la página: reanuda el audio si el sistema lo suspendió, reactiva el bloqueo de pantalla y refresca la vista.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden || !running) return;
+    try { if (ctx.state !== 'running') await ctx.resume(); } catch (e) {}
+    try { if (mediaEl && mediaEl.paused) await mediaEl.play(); } catch (e) {}
+    try { wake = await navigator.wakeLock?.request('screen'); } catch (e) {}
+    schedule(); tick();
+  });
+
+  // Botón principal: inicia o detiene según el estado.
   go.addEventListener('click', () => running ? stop() : start());
+  // Barra espaciadora = botón principal (salvo que se esté escribiendo en un campo).
   document.addEventListener('keydown', e => {
     if (e.code === 'Space' && !/INPUT/.test(document.activeElement.tagName)) { e.preventDefault(); go.click(); }
   });
+  // Muestra la vista previa inicial al cargar la página.
   preview();
 })();
 </script>
