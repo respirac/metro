@@ -99,7 +99,7 @@
     <!-- Mensaje de estado ("En marcha…", "Detenido.", "¡Tiempo cumplido!"). -->
     <div class="hint" id="hint">Al terminar suenan 5 pitidos seguidos.</div>
     <!-- Versión de la página, para confirmar que se cargó la última publicada. -->
-    <div class="hint" style="font-size:.7rem;margin-top:4px">v2 · 2026-11-20</div>
+    <div class="hint" style="font-size:.7rem;margin-top:4px">v3 · 2026-11-20</div>
   </div>
 </main>
 
@@ -291,16 +291,99 @@
 
   // Actualiza la pantalla (pulsos/min, tiempo restante, barra) con el avance real del reloj de audio.
   function tick() {
-    const el = Math.min(cfg.dur, ctx.currentTime - t0);
+    // En modo archivo el reloj es el del <audio>; en modo en vivo, el del contexto de audio.
+    const el = Math.min(cfg.dur, fileEl ? fileEl.currentTime - 0.15 : ctx.currentTime - t0);
     if (el < 0) return;                               // todavía no arrancó (hay 0,15 s de margen)
     curBpm.textContent = Math.round(bpmAt(el));
     timeLeft.textContent = fmt(cfg.dur - el);
     prog.style.width = (el / cfg.dur * 100) + '%';
   }
 
+  // ---- Modo archivo: la sesión entera se "renderiza" a un WAV y se reproduce con un <audio> normal. ----
+  // Así el audio no depende de JavaScript y sigue sonando con la pantalla apagada a mano.
+  const FILE_MAX = 30 * 60;      // hasta 30 min (≈55 MB a 16 kHz mono); más largo usa el modo en vivo
+  const FILE_SR = 16000;         // frecuencia de muestreo del WAV (alcanza para estos sonidos)
+  let fileEl = null;             // <audio> del modo archivo (null = modo en vivo)
+
+  // Convierte muestras (-1..1) en un archivo WAV de 16 bits mono.
+  function makeWav(f32, sr) {
+    const n = f32.length, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+    const s = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+    s(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); s(8, 'WAVE'); s(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    s(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, f32[i])) * 32767, true);
+    return new Blob([b], { type: 'audio/wav' });
+  }
+
+  // Dibuja todos los pulsos y los 5 pitidos finales en un contexto sin conexión y devuelve el audio resultante.
+  // Reutiliza las funciones de sonido cambiando temporalmente el contexto global.
+  async function renderSession(c) {
+    const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const off = new Off(1, Math.ceil((0.15 + c.dur + 8) * FILE_SR), FILE_SR);
+    const sv = { ctx, out, noiseBuf, nodes, clockTick };
+    ctx = off; out = off.createGain(); out.connect(off.destination); noiseBuf = null; nodes = []; clockTick = false;
+    try {
+      let t = 0.15;                                   // mismo margen inicial que el modo en vivo
+      while (t - 0.15 < c.dur - 1e-6) { play(t, false); t += 60 / bpmAt(t - 0.15); }
+      const end = 0.15 + c.dur;
+      for (let i = 0; i < 5; i++) play(end + i * 0.9, true);
+      return await off.startRendering();
+    } finally {
+      ({ ctx, out, noiseBuf, nodes, clockTick } = sv);   // restaura el contexto normal
+    }
+  }
+
+  // Libera el <audio> del modo archivo.
+  function dropFile() {
+    if (!fileEl) return;
+    const e = fileEl; fileEl = null;
+    e.onended = null;
+    try { e.pause(); } catch (_) {}
+    try { URL.revokeObjectURL(e.src); } catch (_) {}
+    e.removeAttribute('src');
+  }
+
+  // Arranca la sesión en modo archivo. Lanza error si algo falla (start() cae entonces al modo en vivo).
+  async function startFile() {
+    go.disabled = true; go.textContent = 'Preparando…'; hint.textContent = 'Preparando el audio…';
+    try {
+      // Se reproduce primero un silencio dentro del clic para que el navegador deje usar este <audio> después.
+      fileEl = new Audio(); fileEl.loop = true;
+      fileEl.src = URL.createObjectURL(makeWav(new Float32Array(8000), 8000));
+      await fileEl.play();
+      const buf = await renderSession(cfg);
+      const old = fileEl.src;
+      fileEl.loop = false;
+      fileEl.src = URL.createObjectURL(makeWav(buf.getChannelData(0), buf.sampleRate));
+      try { URL.revokeObjectURL(old); } catch (_) {}
+      fileEl.onended = () => stop(true);              // al terminar el archivo, cierra la sesión
+      await fileEl.play();
+    } catch (e) { dropFile(); go.disabled = false; throw e; }
+    go.disabled = false;
+    running = true; finished = true;
+    go.textContent = 'Detener'; go.classList.add('stop');
+    hint.textContent = 'En marcha… (sigue con la pantalla apagada)';
+    ui = setInterval(tick, 250);
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: 'Metrónomo descendente' });
+        navigator.mediaSession.playbackState = 'playing';
+        navigator.mediaSession.setActionHandler('pause', () => stop());
+        navigator.mediaSession.setActionHandler('stop', () => stop());
+      } catch (_) {}
+    }
+    try { wake = await navigator.wakeLock?.request('screen'); } catch (_) {}
+  }
+
   // Inicia la sesión.
   async function start() {
     cfg = vals();                                     // congela la configuración
+    if (cfg.dur <= FILE_MAX) {
+      try { await startFile(); return; }
+      catch (e) { console.error('Modo archivo falló, uso modo en vivo:', e); }
+    }
     ensureCtx();
     await ctx.resume();
     await startMedia();
@@ -323,6 +406,7 @@
     nodes = [];
     try { wake && wake.release(); } catch (e) {}      // libera el bloqueo de pantalla
     stopMedia();
+    dropFile();
     go.textContent = 'Iniciar'; go.classList.remove('stop');
     hint.textContent = done === true ? '¡Tiempo cumplido!' : 'Detenido.';
     if (done === true) { curBpm.textContent = cfg.b; timeLeft.textContent = '0:00'; prog.style.width = '100%'; }   // pantalla final
@@ -332,6 +416,11 @@
   // Al volver a la página: reanuda el audio si el sistema lo suspendió, reactiva el bloqueo de pantalla y refresca la vista.
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden || !running) return;
+    if (fileEl) {                                     // modo archivo: solo reactivar bloqueo de pantalla y refrescar
+      try { if (fileEl.paused) await fileEl.play(); } catch (e) {}
+      try { wake = await navigator.wakeLock?.request('screen'); } catch (e) {}
+      tick(); return;
+    }
     try { if (ctx.state !== 'running') await ctx.resume(); } catch (e) {}
     try { if (mediaEl && mediaEl.paused) await mediaEl.play(); } catch (e) {}
     try { wake = await navigator.wakeLock?.request('screen'); } catch (e) {}
